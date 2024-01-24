@@ -67,8 +67,7 @@ elseif p.environment == 2  % get realistic size when debugging on Macbook
 end
 p.escape = KbName('q');
 %% Screen parameters
-%ScreenNr = Screens(end); %pick screen with largest screen number
-ScreenNr = 0; % set to smallest when working with dual monitor setup to have display on laptop
+ScreenNr = 0;
 p.ScreenSizePixels = Screen('Rect', ScreenNr);
 tmprect = get(0, 'ScreenSize');
 computer_res = tmprect(3:4);
@@ -84,7 +83,7 @@ else
     CenterY = 768/2;
 end % if windowed
 [width, height] = Screen('DisplaySize', ScreenNr); % this is in mm
-p.ScreenHeight = height/10; % in cm, ? cm in the scanner?
+p.ScreenHeight = height/10; 
 p.ViewDistance = 57; % (57 cm is the ideal distance where 1 cm equals 1 visual degree)
 p.VisAngle = (2*atan2(p.ScreenHeight/2, p.ViewDistance))*(180/pi); % visual angle of the whole screen
 p.ppd = p.ScreenSizePixels(4)/p.VisAngle; % pixels per degree visual angle
@@ -120,52 +119,34 @@ else
     p.TrialNumGlobal = 0;
     p.startRun = startRun;
     p.nruns = nruns;
-    p.stairstep = .7; % size of % increment/decrement in contrast for distractor task
-    p.change = 10; % change by 10 degrees
+
     %Experimental params required for counterbalancing
     p.NumOrientBins = 4; %must be multiple of the size of your orientation space (here: 180)
     p.OrientBins = reshape(1:180,180/p.NumOrientBins,p.NumOrientBins);
-    % instead of Ori Bins need to non-uniformly sample distractor-target
-    % space 90, -45 0 45 +/-15 each 
-    p.DTBins = [-60:-30;-15:15; 30:60; 75:105];
-    p.Kappa = [100 5000]; % try 100 instead of 50
-    p.distractor = {'ignore' ;'attend'};
+    p.Kappa = [100 5000]; %
+    p.Distractor = [0 1]; % absent present
+    p.FixMove = [0 1]; % stay move
     %----------------------------------------------------------------------
     %COUNTERBALANCING ACT--------------------------------------------------
     %---------------------------------------------------------------------
     TrialStuff = [];
-    % make mini design matrix for each set of 3 runs,
-    % columns that are fully counterbalanced: [distractor, ori, ori, kappa, change]
-    designMat = fullfact([2 4 4 2]); % ignore or attend, 4 ori bins target, 4 ori bins distractor, 2 kappa bandwidth, 2 change +/-
+    designMat = fullfact([2 4 2 2]); % fix move/fix stay, 4 ori bins target, 2 distractor present absent, 2 kappa bandwidth
     % replicate for balanced trial nums
-    designMat = repmat(designMat,25,1);
-    % pseudocounterbalance change +/-
-    posneg = ((-1).^(1:length(designMat)))';
-    posneg = Shuffle(posneg);
-    designMat = [designMat posneg];
+    designMat = repmat(designMat,50,1); % 1600 trials total
     % shuffle trials
     trial_cnt = 1:length(designMat);
     trial_cnt_shuffled = Shuffle(trial_cnt);
     for i = 1:length(designMat)
-        trial.distractor = (designMat(trial_cnt_shuffled(i),1));
-        trial.distractorname = p.distractor(designMat(trial_cnt_shuffled(i),1));
-        trial.orient = randsample(p.OrientBins(:,(designMat(trial_cnt_shuffled(i),2))),1);% orientation is full counterbalanced
-        tmp = (randsample(p.DTBins(:,(designMat(trial_cnt_shuffled(i),3))),1) + trial.orient);
-        if tmp > 180
-           tmp = tmp - 180;
-        elseif tmp < 0
-           tmp = tmp + 180;
-        end
-        trial.distractorori = tmp;
+        trial.fixmove = p.FixMove(designMat(trial_cnt_shuffled(i),1));        
+        trial.orient = randsample(p.OrientBins(:,(designMat(trial_cnt_shuffled(i),2))),1);
+        trial.distractor = p.Distractor(designMat(trial_cnt_shuffled(i),3));
         trial.kappa = p.Kappa(designMat(trial_cnt_shuffled(i),4));
-        trial.change = p.change * (designMat(trial_cnt_shuffled(i),5));
         TrialStuff = [TrialStuff trial];
     end
     p.designMat = designMat;
     p.trial_cnt_shuffled = trial_cnt_shuffled;
     if p.shortTrial == 0
         p.NumTrials = 32;% %NOT TRIVIAL! --> must be divisible by MinTrialNum AND by the number of possible iti's (which is 3)
-        %currently total 960 trials, so 32 blocks total, 16 per session
     else
         p.NumTrials = 6;
     end
@@ -174,21 +155,27 @@ clear posneg designMat trial_cnt trial_cnt_shuffled tmp
 cd(expdir); %Back to experiment dir
 %% Main Parameters
 
-%Timing params --
+%Timing Target
 t.PhaseReverseFreq = 8; %in Hz, how often gratings reverse their phase
 t.PhaseReverseTime = 1/t.PhaseReverseFreq;
 t.TargetTime = 4*t.PhaseReverseTime; % 500 ms multiple of Phase reverse time
+%Timing Distractor
 p.nDistsTrial = 15; % number of different ones to make
 t.DistractorTime = 3;% actual distractor time
 t.DistFreq = 25; % how fast distractors flip...make it faster 25Hz
 t.DistFlipTime = 1/t.DistFreq;
 p.nDistFrames = round(t.DistractorTime * t.DistFreq); % how many frames are we flipping through
-p.nchangeframes = 5; % change three frames in a row otherwise 25Hz is too fast to see
-% pre-randomize frames
-t.DistArray = [];
+t.DistArray = [];% pre-randomize frames
 for i = 1:(p.nDistFrames/p.nDistsTrial)
     t.DistArray = [t.DistArray;randperm(p.nDistsTrial)']; % randomize frames no repeats
 end
+%Timing Fixation
+t.FixFreqs = 1;%Hz
+t.possible_FixFreqs = round(linspace(.3,1.7,12),1); % do rate based fixation movements?
+t.numFixes = [1 2 3]; % do number of eye movement based fixation movements?
+t.FixTime = 2;%s
+t.NumFixes = t.FixFreq*t.FixTime;
+%Timing Other
 t.isi1 = 0; %time between memory stimulus and distractor - 0
 t.isi2 = 1; %time between distractor and recall probe - 0
 t.ResponseTime = 3;
@@ -212,8 +199,8 @@ end; clear i
 %Stimulus params (general)
 p.Smooth_size = round(.75*p.ppd); %size of fspecial smoothing kernel
 p.Smooth_sd = round(.4*p.ppd); %smoothing kernel sd
-p.PatchSize = round(2*7*p.ppd); %Size of the patch that is drawn on screen location, so twice the radius, in pixels
-p.OuterDonutRadius = (7*p.ppd)-(p.Smooth_size/2); %Size of donut outsides, automatically defined in pixels.
+p.PatchSize = round(2*27*p.ppd); %Size of the patch that is drawn on screen location, so twice the radius, in pixels
+p.OuterDonutRadius = (27*p.ppd)-(p.Smooth_size/2); %Size of donut outsides, automatically defined in pixels.
 p.InnerDonutRadius = (2*p.ppd)+(p.Smooth_size/2); %Size of donut insides, automatically defined in pixels.
 p.OuterFixRadius = .2*p.ppd; %outter dot radius (in pixels)
 p.InnerFixRadius = p.OuterFixRadius/2; %set to zero if you a donut-hater
@@ -237,8 +224,7 @@ PsychJavaTrouble;
 if p.windowed == 0
     [window, ScreenSize] = Screen('OpenWindow', ScreenNr, p.gray);
 else
-    % if we're dubugging open a 640x480 window that is a little bit down from the upper left
-    % of the big screen
+    % if we're dubugging open a smaller window
     [window, ScreenSize]=Screen('OpenWindow', ScreenNr, p.gray, [0 0 1024 768]);
 end
 t.ifi = Screen('GetFlipInterval',window);
@@ -278,10 +264,9 @@ for b = startRun:nruns % block loop
     data.TestOrient = randsample(1:180,p.NumTrials,true);
     data.DistResp = NaN(p.NumTrials,1);
     data.DistReact = NaN(p.NumTrials,1);
-    data.Change = randsample([1 -1], p.NumTrials, true);
-    data.ChangeFrame = NaN(p.NumTrials, p.nchangeframes);
     % preallocate cells so get multiple values per trial
     data.Trajectory = cell(p.NumTrials, 1);
+    data.FixMove = cell(p.NumTrials, 1);
     % timing
     t.TrialStartTime = NaN(p.NumTrials, 1);
     t.stimFlips = NaN(p.NumTrials, 2);
@@ -312,30 +297,10 @@ for b = startRun:nruns % block loop
     TargetsAreHere(:,:,1) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase1)));
     TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
 
-    %% make distractor stimul - make a wide line with gaussian blurred edge
-    % Define the rectangle parameters
-    rectWidth = p.OuterDonutRadius * .5; % Width of the rectangle (same as the diameter of the circle)
-    rectHeight = p.OuterDonutRadius * 2 ; % Height of the rectangle (same as the diameter of the circle)
+    %% make distractor stimuli - same size as target but pure noise
 
-    % Create the rectangle shape
-    rect = zeros(p.PatchSize, p.PatchSize);
-    rectCenterX = round(p.PatchSize / 2);rectCenterY = round(p.PatchSize / 2);
-    rectLeft = rectCenterX - round(rectWidth / 2);rectRight = rectCenterX + round(rectWidth / 2);
-    rectTop = rectCenterY - round(rectHeight / 2);rectBottom = rectCenterY + round(rectHeight / 2);
-    rect(rectTop:rectBottom, rectLeft:rectRight) = 1;
-
-    % Pre-calc distractor change frame
-
-        whichframes = (round(p.nDistFrames/6):5*round(p.nDistFrames/6)); % get 1/6:5/6 of frames to start change
-        data.ChangeFrame(1,1) = randsample(whichframes,1); % randomly select which frames in the middle second of the task to change
-        for n = 2:p.nchangeframes; data.ChangeFrame(1,n) = data.ChangeFrame(1,n-1)+1; end
-
-    % Create the hole in the center of the rectangle with a Gaussian blurred edge
-    rect = rect .* donut_in;
-    rect = filter2(fspecial('gaussian', p.Smooth_size, p.Smooth_sd), rect);
     % now make a matrix with with all my distractors for all my trials
     DistractorsAreHere = NaN(p.PatchSize,p.PatchSize, p.nDistsTrial); % last dimension makes it dynamic
-    DistractorChangeHere = NaN(p.PatchSize,p.PatchSize, p.nchangeframes); % change frame
     distractor_sine = (sin(p.SF/p.ppd*2*pi*(y.*sin(0*pi/180)+x.*cos(0*pi/180))));
     sine_contrast = std(distractor_sine(:));
     for num = 1 : p.nDistsTrial
@@ -353,35 +318,21 @@ for b = startRun:nruns % block loop
         current_noise_contrast = std(filterednoise(:));
         scaling_factor = sine_contrast/current_noise_contrast;
         filterednoise = filterednoise*scaling_factor;
-        %Make it a rectangle
-        filterednoise_phase = filterednoise .* rect;
-        filterednoise_phase = imrotate(filterednoise_phase, 90, 'nearest', 'crop'); % make it horizontal to start
-
-        if (p.stairstep*TrialStuff(startTrialThisRun).change + TrialStuff(startTrialThisRun).distractorori)>180
-            data.Change(1) = p.stairstep*TrialStuff(startTrialThisRun).change;
-        elseif (p.stairstep*TrialStuff(startTrialThisRun).change + TrialStuff(startTrialThisRun).distractorori)<0
-            data.Change(1) = 180 + p.stairstep*TrialStuff(startTrialThisRun).change;
-        else
-            data.Change(1) = p.stairstep*TrialStuff(startTrialThisRun).change + TrialStuff(startTrialThisRun).distractorori;
-        end
-        filterednoise_phaserc = imrotate(filterednoise_phase, data.Change(1), 'nearest', 'crop');
-        for i = 1: p.nchangeframes
-            if num == t.DistArray(data.ChangeFrame(1,i))
-                DistractorChangeHere(:,:,i) = max(0,min(255,p.gray+p.gray*(p.distcontrast(TrialStuff(startTrialThisRun).distractor) * filterednoise_phaserc))); %
-            end %if1
-        end% for i
-
-        % rotate distractor to make an ori
-        filterednoise_phaser = imrotate(filterednoise_phase, TrialStuff(startTrialThisRun).distractorori, 'nearest', 'crop');
-        %Make sure to scale contrast to where it does not get clipped
-        DistractorsAreHere(:,:,num) = max(0,min(255,p.gray+p.gray*(p.distcontrast(TrialStuff(startTrialThisRun).distractor) * filterednoise_phaser)));
-
-
+        %Make it a donut
+        filterednoise_phase = filterednoise .* donut;
+        DistractorsAreHere(:,:,num) = max(0,min(255,p.gray+p.gray*(p.distcontrast(TrialStuff(startTrialThisRun).distractor) * filterednoise_phase)));
     end %for ndists
+
+    % create fixation movement sequence
+    if TrialStuff(startTrialThisRun).fixmove == 0
+        data(startTrialThisRun).FixMove = 0;
+    else
+        data(startTrialThisRun).FixMove = 1;
+    end
+
 
 
     %% Welcome and wait for trigger
-    %Welcome welcome ya'll
     Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
      
     Screen(window,'TextSize',30); 
@@ -432,12 +383,11 @@ for b = startRun:nruns % block loop
             ReversalTimePassed = 0; %Flush time passed.
             % Wait the time!
             while (ReversalTimePassed<t.PhaseReverseTime) %As long as the stimulus is on the screen...
-                %ReversalTimePassed = (GetSecs-t.stimFlips(n,revs)); %And determine exactly how much time has passed since the start of the expt.
                 ReversalTimePassed = (GetSecs-TimeUpdate);
             end
             TimeUpdate = TimeUpdate + t.PhaseReverseTime;
         end
-        % - .03 off
+
         %% delay 1
         %         Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
         %         Screen('DrawingFinished', window);
@@ -455,19 +405,10 @@ for b = startRun:nruns % block loop
             DistToDraw(d) = Screen('MakeTexture', window, DistractorsAreHere(:,:,d));
         end %for
 
-        for i = 1: p.nchangeframes
-            ChangeToDraw(i) = Screen('MakeTexture', window, DistractorChangeHere(:,:,i));
-        end %for i
-
         react = NaN;
         dist_start = GetSecs;
         for k = 1:round(t.DistractorTime * t.DistFreq)
-            if sum(ismember(data.ChangeFrame(n,:),k))>0
-                Screen('DrawTexture', window, ChangeToDraw(data.ChangeFrame(n,:) == k), [], MyPatch, [],0); %filtermode then alpha
-            else
-                Screen('DrawTexture', window, DistToDraw(t.DistArray(k)), [], MyPatch, [],0);
-            end %endif
-
+            Screen('DrawTexture', window, DistToDraw(t.DistArray(k)), [], MyPatch, [],0);
             Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
             Screen('DrawingFinished', window);
             Screen('Flip', window);
@@ -493,23 +434,20 @@ for b = startRun:nruns % block loop
             FlipTimePassed = 0; %Flush time passed.
             % Wait the time!
             while (FlipTimePassed<t.DistFlipTime) %As long as the stimulus is on the screen...
-                %FlipTimePassed = (GetSecs-t.DistFlips(n,k)); %And determine exactly how much time has passed since the start of the expt.
                 FlipTimePassed = (GetSecs-TimeUpdate);
             end%while
             TimeUpdate = TimeUpdate + t.DistFlipTime;
         end%for
         data.DistReact(n) = react;
         Screen('Close', [DistToDraw]);
-        clear d DistToDraw ChangeToDraw change
-        % + .001 off
-        %% delay 2 isi2
+        clear d DistToDraw 
 
+        %% isi2
         Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
         Screen('DrawingFinished', window);
         Screen('Flip', window);
         %TIMING!:
         GlobalTimer = GlobalTimer + t.isi2;
-        %delay2TimePassed = 0; %Flush time passed.
         delay2TimePassed = (GetSecs-TimeUpdate);
         while (delay2TimePassed<t.isi2) %As long as the stimulus is on the screen...
             delay2TimePassed = (GetSecs-TimeUpdate); %And determine exactly how much time has passed since the start of the expt.
@@ -538,7 +476,7 @@ for b = startRun:nruns % block loop
         end
             TimeUpdate = TimeUpdate + t.isi2; %Update Matlab on what time it is.
             data.DistReact(n) = react;
-            % +.02 off
+
         %% response window
         % get RT
         % full report spin a line, in quadrant we are probing
@@ -612,7 +550,7 @@ for b = startRun:nruns % block loop
             data.Response(n) = NaN;
         end
         TimeUpdate = TimeUpdate + t.ResponseTime; %Update Matlab on what time it is.
-% +.01 off
+
         %% iti
 
         if p.debug>0
@@ -630,65 +568,25 @@ for b = startRun:nruns % block loop
         % Make things during ITI must be less than <2sec shortest iti
         if p.TrialNumGlobal < length(TrialStuff)
             % TARGET for next trial
-            % 4D array - target position, x_size, y_size, numtrials
-            % initialize with middle grey (background color), then fill in a
-            % phase 1 or 2 as needed for each trial.
-            TargetsAreHere = ones(p.PatchSize,p.PatchSize,2) * p.gray; % last dimension 2 phases
-            % call function that creates filtered gratings
+            TargetsAreHere = ones(p.PatchSize,p.PatchSize,2) * p.gray;
             [image_final1, image_final2] = FilteredGratingsV3(p.PatchSize, p.SF, p.ppd, p.fNyquist, p.Noise_fLow, p.Noise_fHigh, p.gray, p.whitenoiseContrast, TrialStuff(p.TrialNumGlobal+1).orient, TrialStuff(p.TrialNumGlobal+1).kappa);
-            %Make it a donut
             stim_phase1 = image_final1.*donut;
             stim_phase2 = image_final2.*donut;
-            %Give the grating the right contrast level and scale it
             TargetsAreHere(:,:,1) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase1)));
             TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
-
             % DISTRACTOR for next trial
-            % figure out which frame to change the ori
-
-                whichframes = (round(p.nDistFrames/6):5*round(p.nDistFrames/6)); % get 1/6:5/6 of frames to start change
-                data.ChangeFrame(n+1,1) = randsample(whichframes,1); % randomly select which frames in the middle second of the task to change
-                for nn = 2:p.nchangeframes; data.ChangeFrame(n+1,nn) = data.ChangeFrame(n+1,nn-1)+1; end
-
             for num = 1 : p.nDistsTrial
-                %Make uniform noise, put it into fourrier space, make sf filer
                 noise = rand(p.PatchSize,p.PatchSize)*2-1;
                 fn_noise = fftshift(fft2(noise));
                 sfFilter = Bandpass2([p.PatchSize p.PatchSize], p.Noise_fLow/p.fNyquist, p.Noise_fHigh/p.fNyquist);
-                %Get rid of gibbs ringing artifacts
-                smoothfilter = fspecial('gaussian', 10, 4);   % make small gaussian blob
-                sfFilter = filter2(smoothfilter, sfFilter); % convolve smoothing blob w/ s.f. filter
-                %Bring noise back into real space
+                smoothfilter = fspecial('gaussian', 10, 4);
+                sfFilter = filter2(smoothfilter, sfFilter);
                 filterednoise = real(ifft2(ifftshift(sfFilter.*fn_noise)));
-                %Scale the contrast of the noise back up (it's lost some in the fourier
-                %domain) by relating it to the contrast of the grating distractor (before gaussian was applied)
                 current_noise_contrast = std(filterednoise(:));
                 scaling_factor = sine_contrast/current_noise_contrast;
                 filterednoise = filterednoise*scaling_factor;
-                %Make it a rectangle
-                filterednoise_phase = filterednoise .* rect;
-                filterednoise_phase = imrotate(filterednoise_phase, 90, 'nearest', 'crop'); % make it horizontal to start
-                
-                    if (p.stairstep*TrialStuff(p.TrialNumGlobal+1).change + TrialStuff(p.TrialNumGlobal+1).distractorori)>180
-                        data.Change(n+1) = p.stairstep*TrialStuff(p.TrialNumGlobal+1).change;
-                    elseif (p.stairstep*TrialStuff(p.TrialNumGlobal+1).change + TrialStuff(p.TrialNumGlobal+1).distractorori)<0
-                        data.Change(n+1) = 180 + p.stairstep*TrialStuff(p.TrialNumGlobal+1).change;
-                    else
-                        data.Change(n+1) = p.stairstep*TrialStuff(p.TrialNumGlobal+1).change + TrialStuff(p.TrialNumGlobal+1).distractorori;
-                    end
-                    filterednoise_phaserc = imrotate(filterednoise_phase, data.Change(n+1), 'nearest', 'crop');
-                    for i = 1: p.nchangeframes
-                        if num == t.DistArray(data.ChangeFrame(n+1,i))
-                            DistractorChangeHere(:,:,i) = max(0,min(255,p.gray+p.gray*(p.distcontrast(TrialStuff(p.TrialNumGlobal+1).distractor) * filterednoise_phaserc))); %
-                        end %if1
-                    end% for i
-
-                % rotate it to make an ori
-
-                    filterednoise_phaser = imrotate(filterednoise_phase, TrialStuff(p.TrialNumGlobal+1).distractorori, 'nearest', 'crop');
-                    %Make sure to scale contrast to where it does not get clipped
-                    DistractorsAreHere(:,:,num) = max(0,min(255,p.gray+p.gray*(p.distcontrast(TrialStuff(p.TrialNumGlobal+1).distractor) * filterednoise_phaser)));
-
+                filterednoise_phase = filterednoise .* donut;
+                DistractorsAreHere(:,:,num) = max(0,min(255,p.gray+p.gray*(p.distcontrast(TrialStuff(p.TrialNumGlobal+1).distractor) * filterednoise_phase)));
             end%for
         end %if we have another trial coming up
        
@@ -716,12 +614,12 @@ for b = startRun:nruns % block loop
         end
         TimeUpdate = TimeUpdate + t.iti(n);  
         GlobalTimer = GlobalTimer + t.iti(n);
-% -.001 off
+
     end %end of experimental trial loop
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%% END OF TRIAL %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%changeframe%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     %----------------------------------------------------------------------
     %LOOK AT BEHAVIORAL PERFOPRMANCE---------------------------------------
@@ -737,9 +635,6 @@ for b = startRun:nruns % block loop
     acc(mod(targets_were-acc,360)==data.Response)=-acc(mod(targets_were-acc,360)==data.Response);
     acc(mod((targets_were+180)-acc,360)==data.Response)=-acc(mod((targets_were+180)-acc,360)==data.Response);
     data.Accuracy = acc;
-    %figure;hist(data.Accuracy,-90:1:90); set(gca,'XLim',[-90 90],'XTick',[-90:45:90]);
-    %title(['Mean accuracy was ' num2str(mean(abs(data.Accuracy))) ' degrees'],'FontSize',16)
-
     % get average of trial accuracy if worse than 45 average, tell to stop
     performance = mean(abs(data.Accuracy), 'omitnan');
     % count non-responses to perform attention check
@@ -759,29 +654,6 @@ for b = startRun:nruns % block loop
         feedbackStr = [blockStr sprintf('\n') 'Press the spacebar to continue'];
     end
 
-    % Look at distractor detection: staircase change if not 75percent
-    scores = 0;
-    ind = find([TrialStuff(p.TrialNumGlobal+1-p.NumTrials:p.TrialNumGlobal).distractor]'==2 ); % get which trials should've had a detection
-    for i = 1:length(ind)
-        if TrialStuff(ind(i)).change > 0
-            if sum(ismember([p.ccwFast, p.ccwSlow], data.DistResp(ind(i))))>0;scores = scores+1;end
-        elseif TrialStuff(ind(i)).change < 0
-            if sum(ismember([p.cwFast, p.cwSlow], data.DistResp(ind(i))))>0;scores = scores+1;end
-        end %if
-    end %for
-    p.check = 100*(scores/length(ind));
-    if p.check > 79
-        % if they are too good then make it harder change by 10% less
-        if p.stairstep >.2
-            p.stairstep = p.stairstep - .1; %
-        end
-    elseif p.check < 71
-        % if they are not good then make it easier by changing 10% more
-        if p.stairstep <2
-            p.stairstep = p.stairstep + .1;
-        end
-        
-    end
     %----------------------------------------------------------------------
     %SAVE OUT THE DATA-----------------------------------------------------
     %----------------------------------------------------------------------
@@ -859,8 +731,5 @@ end
 clear screen
 ListenChar(1);
 ShowCursor;
-
-
-
 
 end
