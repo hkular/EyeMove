@@ -330,6 +330,61 @@ for b = startRun:nruns % block loop
         data(startTrialThisRun).FixMove = 1;
     end
 
+% %% Setup Eye-tracking %
+% if doET
+%     %%% ET %%%
+%     connected = Eyelink('Initialize','PsychEyelinkDispatchCallback');
+%     
+%     %check if it worked
+%     if Eyelink('IsConnected') == 1 && connected == 0 %two ways of checking if it is connected
+%         et.etOn = 1;
+%     else
+%         et.etOn = 0;
+%         msg = 'No eye tracker detected. Should I try to continue? (y/n)';
+%         DrawFormattedText(win, msg, 'center', 'center', 255);
+%         Screen('Flip',win);
+%         [~, keycode] = KbWait(-1);
+%         if any(strcmp(KbName(keycode),'n'))
+%             error('Execution terminated by user')
+%         elseif any(strcmp(KbName(keycode),'y'))
+%             if (Eyelink('Initialize') ~= 0)
+%                 et.etOn = 0;
+%                 error('Sorry, cannot connect')
+%             elseif (Eyelink('Initialize') == 0)
+%                 et.etOn = 1;
+%             end
+%         end
+%     end
+%     
+%     % which data to save
+%     status = Eyelink('Command',...
+%         'link_sample_data = LEFT,RIGHT,GAZE,AREA,GAZERES,HREF,PUPIL,STATUS,INPUT');
+%     Eyelink('Command', 'sample_rate = 1000');
+%     
+%     % tell eyelink current screen resolution
+%     Eyelink('command','screen_pixel_coords = %ld %ld %ld %ld',0, 0,w-1,h-1);
+%     
+%     % setting up with the Eyelink routine
+%     el = EyelinkInitDefaults(win);
+%     EyelinkDoTrackerSetup(el);
+% 
+%     %--------------------------------------------------------------------------
+%     % Allocate space to save eyetracker violations
+%     %--------------------------------------------------------------------------
+%     stim = struct(); % this will be used at the end to draw plots
+% 
+%     stim.gazeViolationIdx = NaN([10,1]);
+%     stim.gazeViolationType = NaN([10,1]);
+%     stim.gazeViolationTypeDisplay = NaN([10,1]);
+%     stim.gazeViolationEvents = NaN([10,1]);
+%     stim.gazeViolationDisplay = NaN([10,1]);
+%     stim.violationOnset = NaN([10,1]);
+% 
+%     % some extra parameters to detect fixation violation
+%     p.fixTol = 2*p.ppd;
+%     p.violationMaxDur = .05;
+%     p.eyeDirectFB = 1; % give live feedback of gaze position
+% end
 
 
     %% Welcome and wait for trigger
@@ -362,14 +417,37 @@ for b = startRun:nruns % block loop
         TimePassed = (GetSecs-TimeUpdate);%And determine exactly how much time has passed since the start of the expt.
     end
     TimeUpdate = TimeUpdate + t.BeginFixation;
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%% A TRIAL %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% %% SET UP EYETRACKING -- FILENAME & START RECORDING
+% if doET
+%     % filename
+%     edf_fn = sprintf('OT%s%02d.edf',p.subName,p.currBlock);
+%     toRename_edf = fullfile(data_dir, sprintf('%s_S%s_B%02d.edf',expName,p.subName,p.currBlock));
+%     status = Eyelink('OpenFile', edf_fn);
+%     
+%     % timestamps of exp info
+%     % Eyelink('Message',sprintf('BLOCK_%02d_STARTED',b));
+%     Eyelink('Message', ['FILENAME: ', toRename_edf]);
+%     Eyelink('Message', ['SUBJECT: ', p.subName]);
+%     Eyelink('Message', ['BLOCK: ', sprintf('%02d', p.currBlock)]);
+%     Eyelink('Message', ['SYSTEM DATE AND TIME: ', ...
+%         datestr(now, 'dd-mm-yyyy HH:MM:SS')]);
+% 
+%     % Check which eye is available for gaze-contingent drawing. Returns 0 (left), 1 (right) or 2 (binocular)
+%     stim.eyeUsed = Eyelink('EyeAvailable');
+%     
+%     % START RECORDING
+%     Eyelink('StartRecording');
+%     Eyelink('Message','SESSION_STARTED');
+% end
+%% Start trial loop    
     for n = 1:p.NumTrials
         t.TrialStartTime(n) = GlobalTimer; %Get the starttime of each single block (relative to experiment start)
         TimeUpdate = t.StartTime + t.TrialStartTime(n);
         p.TrialNumGlobal = p.TrialNumGlobal+1;
-       
+        %if doET; Eyelink('Message',['TRIAL_', num2str(p.TrialNumGlobal), '.START']); end %%% ET %%%
+
+
         %% Target rendering
         for revs = 1:t.TargetTime/t.PhaseReverseTime
             StimToDraw = Screen('MakeTexture', window, TargetsAreHere(:,:,rem(revs,2)+1));
