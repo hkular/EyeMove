@@ -9,8 +9,8 @@
 % Stimulus categories
 % Target: full screen gabor orientation w/noise - set size + uncertainty 2 levels
 % structured noise
-% distractor: present and absent full screen noise mask, dual task: fixation point stays or
-% moves rate 1Hz
+% distractor: present and absent full screen noise mask, saccade point in
+% both conditions
 % Testing sensory recruitment critic hypothesis that new saccades would
 % wipe sensory areas
 
@@ -130,17 +130,16 @@ else
     %COUNTERBALANCING ACT--------------------------------------------------
     %---------------------------------------------------------------------
     TrialStuff = [];
-    designMat = fullfact([2 4 2 2]); % fix move/fix stay, 4 ori bins target, 2 distractor present absent, 2 kappa bandwidth
+    designMat = fullfact([ 4 2 2]); %  4 ori bins target, 2 distractor present absent, 2 kappa bandwidth
     % replicate for balanced trial nums
     designMat = repmat(designMat,50,1); % 1600 trials total
     % shuffle trials
     trial_cnt = 1:length(designMat);
     trial_cnt_shuffled = Shuffle(trial_cnt);
-    for i = 1:length(designMat)
-        trial.fixmove = p.FixMove(designMat(trial_cnt_shuffled(i),1));        
+    for i = 1:length(designMat)        
         trial.orient = randsample(p.OrientBins(:,(designMat(trial_cnt_shuffled(i),2))),1);
-        trial.distractor = p.Distractor(designMat(trial_cnt_shuffled(i),3));
-        trial.kappa = p.Kappa(designMat(trial_cnt_shuffled(i),4));
+        trial.distractor = p.Distractor(designMat(trial_cnt_shuffled(i),2));
+        trial.kappa = p.Kappa(designMat(trial_cnt_shuffled(i),3));
         TrialStuff = [TrialStuff trial];
     end
     p.designMat = designMat;
@@ -169,12 +168,8 @@ t.DistArray = [];% pre-randomize frames
 for i = 1:(p.nDistFrames/p.nDistsTrial)
     t.DistArray = [t.DistArray;randperm(p.nDistsTrial)']; % randomize frames no repeats
 end
-%Timing Fixation
-t.FixFreqs = 1;%Hz
-t.possible_FixFreqs = round(linspace(.3,1.7,12),1); % do rate based fixation movements?
-t.numFixes = [1 2 3]; % do number of eye movement based fixation movements?
-t.FixTime = 2;%s
-t.NumFixes = t.FixFreq*t.FixTime;
+%Timing Dot Saccade
+t.MinDotTime = 50; % min 50 ms, stays until confirm fixation
 %Timing Other
 t.isi1 = 0; %time between memory stimulus and distractor - 0
 t.isi2 = 1; %time between distractor and recall probe - 0
@@ -199,8 +194,8 @@ end; clear i
 %Stimulus params (general)
 p.Smooth_size = round(.75*p.ppd); %size of fspecial smoothing kernel
 p.Smooth_sd = round(.4*p.ppd); %smoothing kernel sd
-p.PatchSize = round(2*27*p.ppd); %Size of the patch that is drawn on screen location, so twice the radius, in pixels
-p.OuterDonutRadius = (27*p.ppd)-(p.Smooth_size/2); %Size of donut outsides, automatically defined in pixels.
+p.PatchSize = round(2*15*p.ppd); %Size of the patch that is drawn on screen location, so twice the radius, in pixels
+p.OuterDonutRadius = (15*p.ppd)-(p.Smooth_size/2); %Size of donut outsides, automatically defined in pixels.
 p.InnerDonutRadius = (2*p.ppd)+(p.Smooth_size/2); %Size of donut insides, automatically defined in pixels.
 p.OuterFixRadius = .2*p.ppd; %outter dot radius (in pixels)
 p.InnerFixRadius = p.OuterFixRadius/2; %set to zero if you a donut-hater
@@ -208,6 +203,10 @@ p.FixColor = p.black;
 p.ResponseLineWidth = 2; %in pixel
 p.ResponseLineColor =p.white;
 MyPatch = [(CenterX-p.PatchSize/2) (CenterY-p.PatchSize/2) (CenterX+p.PatchSize/2) (CenterY+p.PatchSize/2)];
+p.DotSize = .5*p.ppd;
+p.Dot = [0 0 p.DotSize p.DotSize];
+p.DotEccentricity = linspace(p.InnerDonutRadius, p.OuterDonutRadius); % where to put the dot within target annulus space
+p.DotColor = [245.0980 36.8980 17.6039]; % red-ish
 
 %Stimulus params (specific)
 p.SF = 2; %spatial frequency in cpd
@@ -262,11 +261,11 @@ for b = startRun:nruns % block loop
     data.Response = NaN(p.NumTrials, 1);
     data.RTresp = NaN(p.NumTrials, 1);
     data.TestOrient = randsample(1:180,p.NumTrials,true);
+    data.DotEccen = randsample(p.DotEccentricity, p.NumTrials, true);
     data.DistResp = NaN(p.NumTrials,1);
     data.DistReact = NaN(p.NumTrials,1);
     % preallocate cells so get multiple values per trial
     data.Trajectory = cell(p.NumTrials, 1);
-    data.FixMove = cell(p.NumTrials, 1);
     % timing
     t.TrialStartTime = NaN(p.NumTrials, 1);
     t.stimFlips = NaN(p.NumTrials, 2);
@@ -296,7 +295,18 @@ for b = startRun:nruns % block loop
     %Give the grating the right contrast level and scale it
     TargetsAreHere(:,:,1) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase1)));
     TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
+    %% make saccade dot stimuli
+   
+    thisAng = randi(360); % randomly choose angular location for dot
+    DotLoc = [CenterX - cosd(thisAng)*data.DotEccen(startTrialThisRun),...
+        CenterY - sind(thisAng)*data.DotEccen(startTrialThisRun),...
+        CenterX + cosd(thisAng)*data.DotEccen(startTrialThisRun),...
+        CenterY + sind(thisAng)*data.DotEccen(startTrialThisRun)];
 
+[CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius]
+    %% Draw Saccade Dot
+    Screen('FillOval', window, p.DotColor, DotLoc);
+    Screen('Flip', window); 
     %% make distractor stimuli - same size as target but pure noise
 
     % now make a matrix with with all my distractors for all my trials
@@ -323,12 +333,6 @@ for b = startRun:nruns % block loop
         DistractorsAreHere(:,:,num) = max(0,min(255,p.gray+p.gray*(p.distcontrast(TrialStuff(startTrialThisRun).distractor) * filterednoise_phase)));
     end %for ndists
 
-    % create fixation movement sequence
-    if TrialStuff(startTrialThisRun).fixmove == 0
-        data(startTrialThisRun).FixMove = 0;
-    else
-        data(startTrialThisRun).FixMove = 1;
-    end
 
 % %% Setup Eye-tracking %
 % if doET
