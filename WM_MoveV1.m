@@ -205,8 +205,9 @@ p.ResponseLineColor =p.white;
 MyPatch = [(CenterX-p.PatchSize/2) (CenterY-p.PatchSize/2) (CenterX+p.PatchSize/2) (CenterY+p.PatchSize/2)];
 p.DotSize = .5*p.ppd;
 p.Dot = [0 0 p.DotSize p.DotSize];
-p.DotEccentricity = linspace(2, 15); % where to put the dot within target annulus space
 p.DotColor = [245.0980 36.8980 17.6039]; % red-ish
+[X, Y] = meshgrid(MyPatch(1):p.DotSize:MyPatch(3), MyPatch(2):p.DotSize:MyPatch(4));
+p.dotPositions = [X(:), Y(:)];
 
 %Stimulus params (specific)
 p.SF = 2; %spatial frequency in cpd
@@ -261,7 +262,7 @@ for b = startRun:nruns % block loop
     data.Response = NaN(p.NumTrials, 1);
     data.RTresp = NaN(p.NumTrials, 1);
     data.TestOrient = randsample(1:180,p.NumTrials,true);
-    data.DotEccen = randsample(p.DotEccentricity, p.NumTrials, true);
+    data.DotSample = randsample(1:size(dotPositions,1), p.NumTrials, true);
     data.DistResp = NaN(p.NumTrials,1);
     data.DistReact = NaN(p.NumTrials,1);
     % preallocate cells so get multiple values per trial
@@ -296,11 +297,8 @@ for b = startRun:nruns % block loop
     TargetsAreHere(:,:,1) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase1)));
     TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
     %% make saccade dot stimuli
-   
-    [X, Y] = meshgrid(MyPatch(1):p.DotSize:MyPatch(3), MyPatch(2):p.DotSize:MyPatch(4));
-dotPositions = [X(:), Y(:)];
-dot = dotPositions(randsample(256,1),1:2);
-dotLocation = [dot(1)-p.OuterFixRadius dot(2)-p.OuterFixRadius dot(1)+p.OuterFixRadius dot(2)+p.OuterFixRadius];   
+    dot = dotPositions(data.DotSample,1:2);
+    dotLocation = [dot(1)-p.OuterFixRadius dot(2)-p.OuterFixRadius dot(1)+p.OuterFixRadius dot(2)+p.OuterFixRadius];   
 
  %% Draw Saccade Dot
     Screen('FillOval', window, p.DotColor, fixLoc);
