@@ -194,7 +194,7 @@ end; clear i
 %Stimulus params (general)
 p.Smooth_size = round(.75*p.ppd); %size of fspecial smoothing kernel
 p.Smooth_sd = round(.4*p.ppd); %smoothing kernel sd
-p.PatchSize = round(2*15*p.ppd); %Size of the patch that is drawn on screen location, so twice the radius, in pixels
+p.PatchSize = round(2*4*p.ppd); %Size of the patch that is drawn on screen location, so twice the radius, in pixels
 p.OuterDonutRadius = (15*p.ppd)-(p.Smooth_size/2); %Size of donut outsides, automatically defined in pixels.
 p.InnerDonutRadius = (2*p.ppd)+(p.Smooth_size/2); %Size of donut insides, automatically defined in pixels.
 p.OuterFixRadius = .2*p.ppd; %outter dot radius (in pixels)
@@ -205,7 +205,7 @@ p.ResponseLineColor =p.white;
 MyPatch = [(CenterX-p.PatchSize/2) (CenterY-p.PatchSize/2) (CenterX+p.PatchSize/2) (CenterY+p.PatchSize/2)];
 p.DotSize = .5*p.ppd;
 p.Dot = [0 0 p.DotSize p.DotSize];
-p.DotEccentricity = linspace(p.InnerDonutRadius, p.OuterDonutRadius); % where to put the dot within target annulus space
+p.DotEccentricity = linspace(2, 15); % where to put the dot within target annulus space
 p.DotColor = [245.0980 36.8980 17.6039]; % red-ish
 
 %Stimulus params (specific)
@@ -297,16 +297,57 @@ for b = startRun:nruns % block loop
     TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
     %% make saccade dot stimuli
    
-    thisAng = randi(360); % randomly choose angular location for dot
-    DotLoc = [CenterX - cosd(thisAng)*data.DotEccen(startTrialThisRun),...
-        CenterY - sind(thisAng)*data.DotEccen(startTrialThisRun),...
-        CenterX + cosd(thisAng)*data.DotEccen(startTrialThisRun),...
-        CenterY + sind(thisAng)*data.DotEccen(startTrialThisRun)];
+    [X, Y] = meshgrid(MyPatch(1):p.DotSize:MyPatch(3), MyPatch(2):p.DotSize:MyPatch(4));
+dotPositions = [X(:), Y(:)];
+dot = dotPositions(randsample(256,1),1:2);
+dotLocation = [dot(1)-p.OuterFixRadius dot(2)-p.OuterFixRadius dot(1)+p.OuterFixRadius dot(2)+p.OuterFixRadius];   
 
-[CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius]
-    %% Draw Saccade Dot
-    Screen('FillOval', window, p.DotColor, DotLoc);
+ %% Draw Saccade Dot
+    Screen('FillOval', window, p.DotColor, fixLoc);
+    %Screen('FillOval', window, p.DotColor, circleLocation);
+    %Screen('FillOval', window, p.DotColor, newCircleLocation);
+    Screen('FillOval', window, p.DotColor, dotLocation);
     Screen('Flip', window); 
+
+%% saccade drawing graveyard
+%     tempRect = [0 0 .5*p.ppd .5*p.ppd];
+%     
+%     
+%     distRect = CenterRectOnPoint(tempRect, ...
+%             CenterX + cosd(thisAng)*5,...
+%             CenterY - sind(thisAng)*5);
+%     
+%     thisAng = randi(360); % randomly choose angular location for dot
+%     DotLoc = [CenterX - cosd(thisAng)*data.DotEccen(startTrialThisRun),...
+%         CenterY - sind(thisAng)*data.DotEccen(startTrialThisRun),...
+%         CenterX + cosd(thisAng)*data.DotEccen(startTrialThisRun),...
+%         CenterY + sind(thisAng)*data.DotEccen(startTrialThisRun)];
+% 
+%  circleLocation = [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius];
+%     
+% 
+% % Calculate the visual angle offset in pixels
+% visualAngleOffset = 4 * p.ppd;
+% 
+% % Move the circle to the desired visual angle
+% finalX = rotatedX +5;%+ visualAngleOffset;
+% finalY = rotatedY;
+% 
+% % move circle to desired visual angle
+% circleLocation = [circleLocation(1)+visualAngleOffset circleLocation(2) circleLocation(3)+visualAngleOffset circleLocation(4)];
+% 
+% % Calculate rotated coordinate
+% rotatedX = CenterX + (circleLocation(1) - CenterX) * cosd(thisAng) - (circleLocation(2) - CenterY) * sind(thisAng);
+% %rotatedX = circleLocation(1) - 
+% rotatedY = CenterY + (circleLocation(1) - CenterX) * sind(thisAng) + (circleLocation(2) - CenterY) * cosd(thisAng);
+% 
+% 
+% % Update circle location
+% newCircleLocation = [rotatedX rotatedY rotatedX + (circleLocation(3) - circleLocation(1)) rotatedY + (circleLocation(4) - circleLocation(2))];
+% 
+% 
+% fixLoc = [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius];
+   
     %% make distractor stimuli - same size as target but pure noise
 
     % now make a matrix with with all my distractors for all my trials
