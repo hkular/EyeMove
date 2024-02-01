@@ -19,7 +19,7 @@
 % Total duration: XX mins or XX mins per session
 % Task: orientation full report and distractor change discrimination
 %%
-function WM_MoveV1(p, info, nruns, startRun)
+function WM_MoveV1(p, info, doET, nruns, startRun)
 
 %% Prepare and collect basic info
 
@@ -65,7 +65,8 @@ elseif p.environment == 2  % get realistic size when debugging on Macbook
     p.cwFast = KbName('RightArrow');
     p.keys = [p.ccwFast, p.ccwSlow, p.cwSlow, p.cwFast];
 end
-p.escape = KbName('q');
+
+
 %% Screen parameters
 ScreenNr = 0;
 p.ScreenSizePixels = Screen('Rect', ScreenNr);
@@ -94,6 +95,7 @@ if round( p.gray)==p.white
 end
 p.fNyquist = 0.5*p.ppd;
 clear tmprect computer_res 
+
 %% Initialize data files and open
 cd(datadir);
 if exist(['WM_MoveV1_S', num2str(info.SubNum), '_Main.mat'])
@@ -107,12 +109,10 @@ if exist(['WM_MoveV1_S', num2str(info.SubNum), '_Main.mat'])
     p.OrientBins = TheData(end).p.OrientBins;
     p.Kappa = TheData(end).p.Kappa;
     p.change = TheData(end).p.change;
-    p.stairstep = TheData(end).p.stairstep;
     p.StartTrial = TheData(end).p.TrialNumGlobal+1;
     p.Block = TheData(end).p.Block+1;
     p.designMat = TheData(end).p.designMat;
     p.trial_cnt_shuffled = TheData(end).p.trial_cnt_shuffled;
-    p.stairstep = TheData(end).p.stairstep;
 else
     p.runNum = 1; %If no data file exists this must be the first run
     p.Block = p.runNum;
@@ -125,7 +125,6 @@ else
     p.OrientBins = reshape(1:180,180/p.NumOrientBins,p.NumOrientBins);
     p.Kappa = [100 5000]; %
     p.Distractor = [0 1]; % absent present
-    p.FixMove = [0 1]; % stay move
     %----------------------------------------------------------------------
     %COUNTERBALANCING ACT--------------------------------------------------
     %---------------------------------------------------------------------
@@ -150,10 +149,10 @@ else
         p.NumTrials = 6;
     end
 end
-clear posneg designMat trial_cnt trial_cnt_shuffled tmp
+clear designMat trial_cnt trial_cnt_shuffled tmp
 cd(expdir); %Back to experiment dir
-%% Main Parameters
 
+%% Main Parameters
 %Timing Target
 t.PhaseReverseFreq = 8; %in Hz, how often gratings reverse their phase
 t.PhaseReverseTime = 1/t.PhaseReverseFreq;
@@ -169,7 +168,7 @@ for i = 1:(p.nDistFrames/p.nDistsTrial)
     t.DistArray = [t.DistArray;randperm(p.nDistsTrial)']; % randomize frames no repeats
 end
 %Timing Dot Saccade
-t.MinDotTime = 50; % min 50 ms, stays until confirm fixation
+t.MinDotTime = .05; % in s so min 50 ms, stays until confirm fixation
 %Timing Other
 t.isi1 = 0; %time between memory stimulus and distractor - 0
 t.isi2 = 1; %time between distractor and recall probe - 0
@@ -184,12 +183,6 @@ t.EndFixation = 2;
 t.lasttrialiti = .5;
 t.ActiveTrialDur = t.TargetTime+t.isi1+t.DistractorTime+t.isi2+t.ResponseTime; %non-iti portion of trial
 t.MeantToBeTime = t.BeginFixation + t.ActiveTrialDur*p.NumTrials + t.EndFixation; % excluding iti
-
-% trial flips
-t.flipTime(1, p.runNum) = t.ActiveTrialDur + t.BeginFixation;
-for i = 2:p.NumTrials
-    t.flipTime(i, p.runNum) = t.flipTime(i-1, p.runNum) + t.ActiveTrialDur;
-end; clear i
 
 %Stimulus params (general)
 p.Smooth_size = round(.75*p.ppd); %size of fspecial smoothing kernel
@@ -208,6 +201,7 @@ p.Dot = [0 0 p.DotSize p.DotSize];
 p.DotColor = [245.0980 36.8980 17.6039]; % red-ish
 [X, Y] = meshgrid(MyPatch(1):p.DotSize:MyPatch(3), MyPatch(2):p.DotSize:MyPatch(4));
 p.dotPositions = [X(:), Y(:)];
+p.DotTol = 2*p.ppd;
 
 %Stimulus params (specific)
 p.SF = 2; %spatial frequency in cpd
@@ -267,11 +261,6 @@ for b = startRun:nruns % block loop
     data.DistReact = NaN(p.NumTrials,1);
     % preallocate cells so get multiple values per trial
     data.Trajectory = cell(p.NumTrials, 1);
-    % timing
-    t.TrialStartTime = NaN(p.NumTrials, 1);
-    t.stimFlips = NaN(p.NumTrials, 2);
-    t.distFlips = NaN(p.NumTrials,p.nDistsTrial,1);
-    t.respFlips = NaN(p.NumTrials, 1);
 
     %% Make target stimuli
     % start with a meshgrid
@@ -296,56 +285,11 @@ for b = startRun:nruns % block loop
     %Give the grating the right contrast level and scale it
     TargetsAreHere(:,:,1) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase1)));
     TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
+
     %% make saccade dot stimuli
-    dot = dotPositions(data.DotSample,1:2);
+    dot = dotPositions(data.DotSample(startTrialThisRun),1:2);
     dotLocation = [dot(1)-p.OuterFixRadius dot(2)-p.OuterFixRadius dot(1)+p.OuterFixRadius dot(2)+p.OuterFixRadius];   
 
- %% Draw Saccade Dot
-    Screen('FillOval', window, p.DotColor, fixLoc);
-    %Screen('FillOval', window, p.DotColor, circleLocation);
-    %Screen('FillOval', window, p.DotColor, newCircleLocation);
-    Screen('FillOval', window, p.DotColor, dotLocation);
-    Screen('Flip', window); 
-
-%% saccade drawing graveyard
-%     tempRect = [0 0 .5*p.ppd .5*p.ppd];
-%     
-%     
-%     distRect = CenterRectOnPoint(tempRect, ...
-%             CenterX + cosd(thisAng)*5,...
-%             CenterY - sind(thisAng)*5);
-%     
-%     thisAng = randi(360); % randomly choose angular location for dot
-%     DotLoc = [CenterX - cosd(thisAng)*data.DotEccen(startTrialThisRun),...
-%         CenterY - sind(thisAng)*data.DotEccen(startTrialThisRun),...
-%         CenterX + cosd(thisAng)*data.DotEccen(startTrialThisRun),...
-%         CenterY + sind(thisAng)*data.DotEccen(startTrialThisRun)];
-% 
-%  circleLocation = [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius];
-%     
-% 
-% % Calculate the visual angle offset in pixels
-% visualAngleOffset = 4 * p.ppd;
-% 
-% % Move the circle to the desired visual angle
-% finalX = rotatedX +5;%+ visualAngleOffset;
-% finalY = rotatedY;
-% 
-% % move circle to desired visual angle
-% circleLocation = [circleLocation(1)+visualAngleOffset circleLocation(2) circleLocation(3)+visualAngleOffset circleLocation(4)];
-% 
-% % Calculate rotated coordinate
-% rotatedX = CenterX + (circleLocation(1) - CenterX) * cosd(thisAng) - (circleLocation(2) - CenterY) * sind(thisAng);
-% %rotatedX = circleLocation(1) - 
-% rotatedY = CenterY + (circleLocation(1) - CenterX) * sind(thisAng) + (circleLocation(2) - CenterY) * cosd(thisAng);
-% 
-% 
-% % Update circle location
-% newCircleLocation = [rotatedX rotatedY rotatedX + (circleLocation(3) - circleLocation(1)) rotatedY + (circleLocation(4) - circleLocation(2))];
-% 
-% 
-% fixLoc = [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius];
-   
     %% make distractor stimuli - same size as target but pure noise
 
     % now make a matrix with with all my distractors for all my trials
@@ -499,7 +443,6 @@ for b = startRun:nruns % block loop
             Screen('DrawingFinished', window);
             Screen('Flip', window);
             %TIMING!:
-            t.stimFlips(n,revs) = GetSecs;
             GlobalTimer = GlobalTimer + t.PhaseReverseTime;
             ReversalTimePassed = 0; %Flush time passed.
             % Wait the time!
@@ -521,6 +464,27 @@ for b = startRun:nruns % block loop
         %         end
         %         TimeUpdate = TimeUpdate + t.isi1; %Update Matlab on what time it is.
         %
+        %% Draw Saccade Dot
+        ETConfirm = 0;
+        DotElapse = (GetSecs - TimeUpdate);
+        while ETConfirm == 0 && DotElapse < t.MinDotTime
+            Screen('FillOval', window, p.DotColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius]);
+            Screen('FillOval', window, p.DotColor, dotLocation);
+            Screen('Flip', window);
+            if doET > 0
+                % Get gaze position
+                [x, y] = Eyelink('GetGazePos');
+
+                % Check if gaze position coincides with the dot center
+                withinTol = sqrt((x - ((dotLocation(1) + dotLocation(3)) / 2))^2 + (y - ((dotLocation(2) + dotLocation(4)) / 2))^2) <= p.fixTol;        
+                if withinTol
+                    ETConfirm = 1;
+                end%if x
+            end %if ET
+            DotElapse = (GetSecs - TimeUpdate);
+        end %while ET
+        TimeUpdate = TimeUpdate + DotElapse;
+
         %% Distractor
         for d = 1:p.nDistsTrial
             DistToDraw(d) = Screen('MakeTexture', window, DistractorsAreHere(:,:,d));
@@ -533,7 +497,6 @@ for b = startRun:nruns % block loop
             Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
             Screen('DrawingFinished', window);
             Screen('Flip', window);
-            t.DistFlips(n,k) = GetSecs;
             GlobalTimer = GlobalTimer + t.DistFlipTime;
             [keyIsDown, secs, keyCode] = KbCheck(-1);
             if keyIsDown == 1
@@ -590,16 +553,11 @@ for b = startRun:nruns % block loop
                     react = secs - dist_start;
                 end
             end
-           
-            %             if p.debug % don't print stuff if we're not debugging
-            %                 %fprintf('\n%d\t%d\t%d\t%d\t%d\t%d%s\n', n, TrialStuff(n).orient, TrialStuff(n).kappa, TrialStuff(n).distractorname, data.TestOrient(n));
-            %                 display(TrialStuff(n).orient, TrialStuff(n).kappa, TrialStuff(n).distractorname);
         end
             TimeUpdate = TimeUpdate + t.isi2; %Update Matlab on what time it is.
             data.DistReact(n) = react;
 
         %% response window
-        % get RT
         % full report spin a line, in quadrant we are probing
         resp_start = GetSecs;
         test_orient = data.TestOrient(n);
@@ -613,11 +571,9 @@ for b = startRun:nruns % block loop
         Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
         Screen('DrawingFinished', window);
         Screen('Flip', window,[],1);
-        t.respFlips(n) = GetSecs;
         GlobalTimer = GlobalTimer + t.ResponseTime;
         react = NaN;
         RespTimePassed = GetSecs-resp_start; %Flush time passed.
-        %RespTimePassed = (GetSecs-TimeUpdate);
         while RespTimePassed<t.ResponseTime  %As long as no correct answer is identified
             RespTimePassed = (GetSecs-TimeUpdate); %And determine exactly how much time has passed since the start of the expt.
             [keyIsDown, secs, keyCode] = KbCheck(-1);
@@ -665,15 +621,13 @@ for b = startRun:nruns % block loop
         data.Response(n) = test_orient;
         data.RTresp(n) = react;
         data.Trajectory{n} = orient_trajectory; %
-
-        % change to make if no keys pressed NaN
+        %if no keys pressed NaN
         if data.Response(n) == data.TestOrient(n)
             data.Response(n) = NaN;
         end
         TimeUpdate = TimeUpdate + t.ResponseTime; %Update Matlab on what time it is.
 
         %% iti
-
         if p.debug>0
             TrialStuff(p.TrialNumGlobal)
             p.TrialNumGlobal
@@ -685,7 +639,6 @@ for b = startRun:nruns % block loop
         end
         Screen('DrawingFinished', window);
         Screen('Flip', window);
-
         % Make things during ITI must be less than <2sec shortest iti
         if p.TrialNumGlobal < length(TrialStuff)
             % TARGET for next trial
@@ -695,6 +648,9 @@ for b = startRun:nruns % block loop
             stim_phase2 = image_final2.*donut;
             TargetsAreHere(:,:,1) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase1)));
             TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
+            % DOT for next trial
+            dot = dotPositions(data.DotSample(p.TrialNumGlobal+1),1:2);
+            dotLocation = [dot(1)-p.OuterFixRadius dot(2)-p.OuterFixRadius dot(1)+p.OuterFixRadius dot(2)+p.OuterFixRadius];   
             % DISTRACTOR for next trial
             for num = 1 : p.nDistsTrial
                 noise = rand(p.PatchSize,p.PatchSize)*2-1;
@@ -756,25 +712,9 @@ for b = startRun:nruns % block loop
     acc(mod(targets_were-acc,360)==data.Response)=-acc(mod(targets_were-acc,360)==data.Response);
     acc(mod((targets_were+180)-acc,360)==data.Response)=-acc(mod((targets_were+180)-acc,360)==data.Response);
     data.Accuracy = acc;
-    % get average of trial accuracy if worse than 45 average, tell to stop
-    performance = mean(abs(data.Accuracy), 'omitnan');
-    % count non-responses to perform attention check
-    check = sum(isnan(data.Response));
-    % change feedback depending on performance and attention check
-    if check<6 && performance<60
-        blockStr = ['Finished block ' num2str(p.runNum)];
-        feedbackStr = [blockStr sprintf('\n') 'Press the spacebar to continue'];
-    elseif check>6
-        blockStr = ['Finished block ' num2str(p.runNum) ' out of ' num2str(nruns)];
-        feedbackStr = [blockStr sprintf('\n') 'STOP and check with experimenter before continuing'];
-    elseif performance>45
-        blockStr = ['Finished block ' num2str(p.runNum) ' out of ' num2str(nruns)];
-        feedbackStr = [blockStr sprintf('\n') 'STOP and check with experimenter before continuing'];
-    else
-        blockStr = ['Finished block ' num2str(p.runNum) ' out of ' num2str(nruns)];
-        feedbackStr = [blockStr sprintf('\n') 'Press the spacebar to continue'];
-    end
-
+    blockStr = ['Finished block ' num2str(b) ' out of ' num2str(nruns)];
+    feedbackStr = [blockStr sprintf('\n') 'Press the spacebar to continue'];
+   
     %----------------------------------------------------------------------
     %SAVE OUT THE DATA-----------------------------------------------------
     %----------------------------------------------------------------------
@@ -798,7 +738,7 @@ for b = startRun:nruns % block loop
     Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
     Screen('Flip', window);
     % may need to change spacing
-    DrawFormattedText(window,[feedbackStr],CenterX-200,CenterY,p.white);
+    DrawFormattedText(window,feedbackStr,CenterX-200,CenterY,p.white);
     Screen('Flip',window);
 
     while 1
@@ -838,10 +778,7 @@ end  % end of block loop
 %----------------------------------------------------------------------
 %WINDOW CLEANUP--------------------------------------------------------
 %----------------------------------------------------------------------
-%This closes all visible and invisible screens and puts the mouse cursor
-%back on the screen
 Screen('CloseAll');
-%load('OriginalCLUT_labC.mat');
 if exist('OriginalCLUT','var')
     if exist('ScreenNr','var')
         Screen('LoadCLUT', ScreenNr, OriginalCLUT);
@@ -854,3 +791,44 @@ ListenChar(1);
 ShowCursor;
 
 end
+
+
+%% saccade drawing graveyard
+%     tempRect = [0 0 .5*p.ppd .5*p.ppd];
+%     
+%     
+%     distRect = CenterRectOnPoint(tempRect, ...
+%             CenterX + cosd(thisAng)*5,...
+%             CenterY - sind(thisAng)*5);
+%     
+%     thisAng = randi(360); % randomly choose angular location for dot
+%     DotLoc = [CenterX - cosd(thisAng)*data.DotEccen(startTrialThisRun),...
+%         CenterY - sind(thisAng)*data.DotEccen(startTrialThisRun),...
+%         CenterX + cosd(thisAng)*data.DotEccen(startTrialThisRun),...
+%         CenterY + sind(thisAng)*data.DotEccen(startTrialThisRun)];
+% 
+%  circleLocation = [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius];
+%     
+% 
+% % Calculate the visual angle offset in pixels
+% visualAngleOffset = 4 * p.ppd;
+% 
+% % Move the circle to the desired visual angle
+% finalX = rotatedX +5;%+ visualAngleOffset;
+% finalY = rotatedY;
+% 
+% % move circle to desired visual angle
+% circleLocation = [circleLocation(1)+visualAngleOffset circleLocation(2) circleLocation(3)+visualAngleOffset circleLocation(4)];
+% 
+% % Calculate rotated coordinate
+% rotatedX = CenterX + (circleLocation(1) - CenterX) * cosd(thisAng) - (circleLocation(2) - CenterY) * sind(thisAng);
+% %rotatedX = circleLocation(1) - 
+% rotatedY = CenterY + (circleLocation(1) - CenterX) * sind(thisAng) + (circleLocation(2) - CenterY) * cosd(thisAng);
+% 
+% 
+% % Update circle location
+% newCircleLocation = [rotatedX rotatedY rotatedX + (circleLocation(3) - circleLocation(1)) rotatedY + (circleLocation(4) - circleLocation(2))];
+% 
+% 
+% fixLoc = [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius];
+   
