@@ -1,4 +1,4 @@
-function runme_WM()
+function runme_EM()
 %-------------------------------------------------------------------------
 % Script to run multiple experiment scripts in a row
 %-------------------------------------------------------------------------
@@ -19,7 +19,7 @@ p.environment = 2; % 1 = Linux machine, 2 = iMac, 3 = PC
 p.portCodes = 2;  %1 = use p.portCodes (we're in the booth), 0 is fMRI, 2 = laptop
 p.windowed = 1; % 1 = small win for easy debugging!, otherwise 0
 p.startClick = 1; % 1 = must press spacebar to initiate each trial.
-p.shortTrial = 0; % 1 is short trials for debugging
+p.shortTrial = 1; % 1 is short trials for debugging
 p.debug = 0;
 p.MRI = 0;
 p.gammacorrect = false;
@@ -46,6 +46,7 @@ else % just save locally!
     p.datadir = [p.root, filesep,'Data',filesep];
 end
 
+commandwindow();
 %% ----------------------------------------------
  % collect subject info
  %-----------------------------------------------
