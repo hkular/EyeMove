@@ -198,7 +198,10 @@ p.Dot = [0 0 p.DotSize p.DotSize];
 p.DotColor = [245.0980 36.8980 17.6039]; % red-ish
 [X, Y] = meshgrid(MyPatch(1):p.DotSize:MyPatch(3), MyPatch(2):p.DotSize:MyPatch(4));
 p.dotPositions = [X(:), Y(:)];
-p.DotTol = 2*p.ppd;
+center_distance = sqrt((p.dotPositions(:,1)-CenterX).^2 + (p.dotPositions(:,2)-CenterY).^2);
+p.dotPositions(center_distance < p.InnerDonutRadius, :) = []; % remove positions inside donut
+p.DotTol = 2*p.ppd; % how far from dot eyetracking gaze can be for confirmed saccade
+
 
 %Stimulus params (specific)
 p.SF = 2; %spatial frequency in cpd
@@ -284,7 +287,7 @@ for b = startRun:nruns % block loop
     TargetsAreHere(:,:,2) = max(0,min(255,p.gray+p.gray*(p.ContrastTarget * stim_phase2)));
 
     %% make saccade dot stimuli
-    dot = p.dotPositions(data.DotSample(startTrialThisRun),1:2);
+    dot = p.dotPositions(data.DotSample(startTrialThisRun),:);
     dotLocation = [dot(1)-p.OuterFixRadius dot(2)-p.OuterFixRadius dot(1)+p.OuterFixRadius dot(2)+p.OuterFixRadius];   
 
     %% make distractor stimuli - same size as target but pure noise
@@ -372,10 +375,9 @@ for b = startRun:nruns % block loop
 
 
     %% Welcome and wait for trigger
-    Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
-     
+    Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])     
     Screen(window,'TextSize',30); 
-    Screen('DrawText',window, 'Fixate. Press spacebar to begin.', CenterX-300, CenterY-75,p.black); 
+    Screen('DrawText',window, 'Fixate. Press spacebar to begin.', CenterX-200, CenterY-75,p.black); 
     Screen('Flip', window); 
     FlushEvents('keyDown'); %First discard all characters from the Event Manager queue.
     ListenChar(2);
@@ -403,27 +405,27 @@ for b = startRun:nruns % block loop
     TimeUpdate = TimeUpdate + t.BeginFixation;
 
 % %% SET UP EYETRACKING -- FILENAME & START RECORDING
-% if doET
-%     % filename
-%     edf_fn = sprintf('OT%s%02d.edf',p.subName,p.currBlock);
-%     toRename_edf = fullfile(data_dir, sprintf('%s_S%s_B%02d.edf',expName,p.subName,p.currBlock));
-%     status = Eyelink('OpenFile', edf_fn);
-%     
-%     % timestamps of exp info
-%     % Eyelink('Message',sprintf('BLOCK_%02d_STARTED',b));
-%     Eyelink('Message', ['FILENAME: ', toRename_edf]);
-%     Eyelink('Message', ['SUBJECT: ', p.subName]);
-%     Eyelink('Message', ['BLOCK: ', sprintf('%02d', p.currBlock)]);
-%     Eyelink('Message', ['SYSTEM DATE AND TIME: ', ...
-%         datestr(now, 'dd-mm-yyyy HH:MM:SS')]);
-% 
-%     % Check which eye is available for gaze-contingent drawing. Returns 0 (left), 1 (right) or 2 (binocular)
-%     stim.eyeUsed = Eyelink('EyeAvailable');
-%     
-%     % START RECORDING
-%     Eyelink('StartRecording');
-%     Eyelink('Message','SESSION_STARTED');
-% end
+if doET
+    % filename
+    edf_fn = sprintf('OT%s%02d.edf',p.subName,p.currBlock);
+    toRename_edf = fullfile(data_dir, sprintf('%s_S%s_B%02d.edf',expName,p.subName,p.currBlock));
+    status = Eyelink('OpenFile', edf_fn);
+    
+    % timestamps of exp info
+    % Eyelink('Message',sprintf('BLOCK_%02d_STARTED',b));
+    Eyelink('Message', ['FILENAME: ', toRename_edf]);
+    Eyelink('Message', ['SUBJECT: ', p.subName]);
+    Eyelink('Message', ['BLOCK: ', sprintf('%02d', p.currBlock)]);
+    Eyelink('Message', ['SYSTEM DATE AND TIME: ', ...
+        datestr(now, 'dd-mm-yyyy HH:MM:SS')]);
+
+    % Check which eye is available for gaze-contingent drawing. Returns 0 (left), 1 (right) or 2 (binocular)
+    stim.eyeUsed = Eyelink('EyeAvailable');
+    
+    % START RECORDING
+    Eyelink('StartRecording');
+    Eyelink('Message','SESSION_STARTED');
+end
 %% Start trial loop    
     for n = 1:p.NumTrials
         t.TrialStartTime(n) = GlobalTimer; %Get the starttime of each single block (relative to experiment start)
@@ -468,24 +470,77 @@ for b = startRun:nruns % block loop
         tic
         ETConfirm = 0;
         DotElapse = 0; % flush time elapsed
-        while ETConfirm == 0 && DotElapse < t.MinDotTime
-            Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius]);
-            Screen('FillOval', window, p.DotColor, dotLocation);
-            Screen('Flip', window);
-            if doET > 0
-                % Get gaze position
-                [x, y] = Eyelink('GetGazePos');
 
-                % Check if gaze position coincides with the dot center
-                withinTol = sqrt((x - ((dotLocation(1) + dotLocation(3)) / 2))^2 + (y - ((dotLocation(2) + dotLocation(4)) / 2))^2) <= p.fixTol;        
-                if withinTol
-                    ETConfirm = 1;
-                end%if x
-            end %if ET
-            DotElapse = (GetSecs - TimeUpdate);
-        end %while ET
-        TimeUpdate = TimeUpdate + DotElapse;
-        toc
+%         %while ETConfirm == 0 && DotElapse < t.MinDotTime
+%         Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius]);
+%         Screen('FillOval', window, p.DotColor, dotLocation);
+%         Screen('Flip', window);
+%         GlobalTimer = GlobalTimer + t.MinDotTime;
+%       
+%         while (DotElapse < t.MinDotTime)
+%             if doET == 1
+%                 % Get gaze position
+%                 [x, y] = Eyelink('GetGazePos');
+%                 % Check if gaze position coincides with the dot center
+%                 withinTol = sqrt((x - ((dotLocation(1) + dotLocation(3)) / 2))^2 + (y - ((dotLocation(2) + dotLocation(4)) / 2))^2) <= p.fixTol;        
+%                 if withinTol
+%                     ETConfirm = 1;
+%                 end%if x
+%             end %if ET
+%             DotElapse = (GetSecs - TimeUpdate);
+%         end %while ET
+%         TimeUpdate = TimeUpdate + t.MinDotTime; % want this to have the option of being longer
+%         toc
+
+
+ETConfirm = 0;
+DotElapse = 0; % flush time passed
+% Display the dot if eye-tracking is enabled or wait for t.MinDotTime if eye-tracking is disabled
+if doET == 1
+    % Loop until eye tracker confirms gaze within tolerance or t.MinDotTime is reached
+    while ~ETConfirm
+        % Draw the dot
+        Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius]);
+        Screen('FillOval', window, p.DotColor, dotLocation);
+        Screen('Flip', window);
+
+        % Check if gaze position coincides with the dot center
+        [x, y] = Eyelink('GetGazePos');
+        withinTol = sqrt((x - ((dotLocation(1) + dotLocation(3)) / 2))^2 + (y - ((dotLocation(2) + dotLocation(4)) / 2))^2) <= p.fixTol;        
+        if withinTol
+            ETConfirm = 1;
+        end
+
+        % Update elapsed time
+        DotElapse = GetSecs - TimeUpdate;
+
+        % If the minimum dot time has elapsed, break out of the loop
+        if DotElapse >= t.MinDotTime
+            break;
+        end
+    end
+else
+    % If eye-tracking is disabled, just wait for t.MinDotTime
+    Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius]);
+    Screen('FillOval', window, p.DotColor, dotLocation);
+    Screen('Flip', window);
+    WaitSecs(t.MinDotTime);
+end
+TimeUpdate = TimeUpdate + t.MinDotTime;
+
+GazeElapse = 0; % flush counter
+% Dot remains on the screen until gaze position is confirmed if eye-tracking is enabled
+while ~ETConfirm && doET == 1
+    GazeElapse = GetSecs - TimeUpdate;
+    [x, y] = Eyelink('GetGazePos');
+    withinTol = sqrt((x - ((dotLocation(1) + dotLocation(3)) / 2))^2 + (y - ((dotLocation(2) + dotLocation(4)) / 2))^2) <= p.fixTol;        
+    if withinTol
+        ETConfirm = 1;
+    end
+end
+
+TimeUpdate = TimeUpdate + GazeElapse;
+
         %% Distractor
         tic
         for d = 1:p.nDistsTrial
@@ -529,7 +584,6 @@ for b = startRun:nruns % block loop
         clear d DistToDraw 
         toc
         %% isi2
-        tic
         Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
         Screen('DrawingFinished', window);
         Screen('Flip', window);
@@ -559,7 +613,6 @@ for b = startRun:nruns % block loop
         end
             TimeUpdate = TimeUpdate + t.isi2; %Update Matlab on what time it is.
             data.DistReact(n) = react;
-        toc
         %% response window
  
         % full report spin a line, in quadrant we are probing
@@ -636,10 +689,10 @@ for b = startRun:nruns % block loop
         Screen('FillRect',window,p.gray);
         Screen('FillOval', window, p.FixColor, [CenterX-p.OuterFixRadius CenterY-p.OuterFixRadius CenterX+p.OuterFixRadius CenterY+p.OuterFixRadius])
         if n < p.NumTrials
-            DrawFormattedText(window,'Press spacebar for the next trial.',CenterX-170,CenterY-40,p.white);
+            DrawFormattedText(window,'Press spacebar for the next trial.',CenterX-200,CenterY-40,p.white);
         end
         Screen('DrawingFinished', window);
-         Screen ('Flip', window);
+        Screen ('Flip', window);
         % Make things during ITI must be less than <2sec shortest iti
 
         if  n < p.NumTrials%p.TrialNumGlobal <length(TrialStuff) if we have another trial

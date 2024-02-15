@@ -50,8 +50,8 @@ commandwindow();
 %% ----------------------------------------------
  % collect subject info
  %-----------------------------------------------
-    p.room = input('Room letter: ', 's'); if isempty(p.room); error('Enter the room letter!'); end
-    practice = input('Practice? y = yes, n = no: ', 's'); if isempty(practice); error('Did the subject already complete a practice run?'); end
+%     p.room = input('Room letter: ', 's'); if isempty(p.room); error('Enter the room letter!'); end
+%     practice = input('Practice? y = yes, n = no: ', 's'); if isempty(practice); error('Did the subject already complete a practice run?'); end
     info.Name = input('Subject initials: ', 's'); if isempty(info.Name); info.Name = 'tmp'; end % collect subject initials
     SubNum = input('Subject number: ', 's'); if isempty(SubNum); SubNum = '00'; end % collect subject number
     info.SubNum = sprintf('%02d', str2double(SubNum));
@@ -63,10 +63,10 @@ commandwindow();
 %% -------------------------------------------------------------------------
 % Run Main Experiment Scripts
 %-------------------------------------------------------------------------
-
-if practice == 'y'
-    WM_MoveV1practice(p, info, 0, 1, 1);
-end
+% 
+% if practice == 'y'
+%     WM_MoveV1practice(p, info, 0, 1, 1);
+% end
 WM_MoveV1(p, info, 0, 1, 1); % p info doET nruns startrun
 
 %-------------------------------------------------------------------------
