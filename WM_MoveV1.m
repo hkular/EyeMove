@@ -526,6 +526,7 @@ else
     Screen('Flip', window);
     WaitSecs(t.MinDotTime);
 end
+GlobalTimer = GlobalTimer + t.MinDotTime;
 TimeUpdate = TimeUpdate + t.MinDotTime;
 
 GazeElapse = 0; % flush counter
@@ -538,7 +539,7 @@ while ~ETConfirm && doET == 1
         ETConfirm = 1;
     end
 end
-
+GlobalTimer = GlobalTimer + GazeElapse;
 TimeUpdate = TimeUpdate + GazeElapse;
 
         %% Distractor
